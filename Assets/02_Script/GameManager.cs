@@ -8,10 +8,17 @@ public class GameManager : MonoBehaviour
     public static GameManager ins;
     public Dictionary<string, GameObject> D_Player = new Dictionary<string, GameObject>();
 
+    public List<GameObject> L_Monster = new List<GameObject>();
+
     //플레이어 3개
     public GameObject Player1;
     public GameObject Player2;
     public GameObject Player3;
+
+    //플레이어 3개
+    public GameObject Monster1;
+    public GameObject Monster2;
+    public GameObject Monster3;
 
     //상태창
     public GameObject[] Status;
@@ -19,9 +26,20 @@ public class GameManager : MonoBehaviour
     Text[] priestTxt;
     Text[] witchTxt;
 
+    // 전체 턴
+    public Slider Turn;
+    public Text Turntxt;
+    public float Turntime = 10;
+    CoolTime ct;
+
+    public bool PlayTurn = true;
+    public bool MonsterTurn = false;
+    public bool CurrTurn = false;
+
     private void Awake()
     {
         ins = this;
+        ct = new CoolTime();
     }
     // Start is called before the first frame update
     void Start()
@@ -30,6 +48,10 @@ public class GameManager : MonoBehaviour
         D_Player.Add("검사", Player1);
         D_Player.Add("신관", Player2);
         D_Player.Add("마법사", Player3);
+
+        L_Monster.Add(Monster1);
+        L_Monster.Add(Monster2);
+        L_Monster.Add(Monster3);
 
         //상태창
         Status = GameObject.FindGameObjectsWithTag("Status");
@@ -43,6 +65,32 @@ public class GameManager : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        Turn.value = ct.Timer(Turntime);
+
+        if(Turn.value >= 0)
+        {
+            PlayTurn = !PlayTurn;
+            CurrTurn = !PlayTurn;
+
+            if(PlayTurn)
+            {
+                Turntxt.text = "Player Turn";
+                MonsterTurn = false;
+            }
+            else
+            {
+                MonsterTurn = true;
+                Turntxt.text = "Monster Turn";
+                StartCoroutine("MonsterAttack");
+            }
+        }
+
+        //PlayTurn = !PlayTurn;
+        //CurrTurn = PlayTurn;
+        //CurrTurn = !CurrTurn;
+
+        Debug.Log("CurrTurn  " + CurrTurn);
+
         //상태표시창
         StatusShow(); // StatusShow(sm);
 
@@ -101,5 +149,19 @@ public class GameManager : MonoBehaviour
                     witchTxt[4].text = "MP           " + P3.Pdata.Mp + "/" + P3.Pdata.MaxMp;
                 }
             }
+    }
+
+    IEnumerator MonsterAttack()
+    {
+        int i = 0;
+        while(MonsterTurn)
+        {
+            if (L_Monster.Count != 0)
+            {
+                L_Monster[(i++) % L_Monster.Count].
+                    GetComponent<Monster>().NomalAttack();
+            }
+            yield return new WaitForSeconds(2f);
+        }
     }
 }
