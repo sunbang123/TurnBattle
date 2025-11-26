@@ -1,27 +1,31 @@
+// ===== CoolTime.cs =====
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class CoolTime
 {
-    public float cooltime;
+    private float startTime;
+    private float duration;
 
-    float coolCnt = 0;
-
-    private void Start()
+    public void StartTimer(float t)
     {
-        coolCnt = Time.time;
+        startTime = Time.time;
+        duration = t;
     }
 
-    public float Timer(float t)
+    public float GetTimer()
     {
-        cooltime += Time.deltaTime;
+        return Time.time - startTime;
+    }
 
-        if(coolCnt + t <= Time.time)
-        {
-            coolCnt = Time.time;
-            cooltime = 0;
-        }
-        return cooltime;
+    public bool IsFinished()
+    {
+        return (Time.time - startTime) >= duration;
+    }
+
+    public float GetProgress()
+    {
+        float elapsed = Time.time - startTime;
+        return Mathf.Clamp01(elapsed / duration);
     }
 }

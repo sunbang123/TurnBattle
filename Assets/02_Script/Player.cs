@@ -1,92 +1,131 @@
+// ===== Player.cs =====
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class Player : MonoBehaviour
 {
     public PlayerData Pdata;
 
-    GameObject[] Monster;
-    Rigidbody2D rig;
+    private GameObject[] monsters;
+    private Rigidbody2D rig;
+    private Vector3 originalPos;
+    private Animator ani;
+    private bool isMoving = false;
+    private bool isAttacking = false;
 
-    public bool Back = false;
-    public Vector3 OriPos;
-    Animator ani;
-
-    public bool home = true;
-
-    //마법진
-    public GameObject MagicAura;
-    public Transform T_MagicAura;
-    // 마법 공격
-    public GameObject Explosion;
-
-    private void Start()
+    void Start()
     {
-        Monster = GameObject.FindGameObjectsWithTag("Monster");
         rig = GetComponent<Rigidbody2D>();
-        OriPos = transform.position;
+        originalPos = transform.position;
         ani = GetComponent<Animator>();
+        Pdata.Hp = Pdata.MaxHp;
     }
 
-    public void NomalAttack()
+    void Update()
     {
-        if(GameManager.ins.CurrTurn == false && home)
+        // 플레이어 턴일 때만 공격 가능
+        if (GameManager.ins.PlayTurn && Input.GetKeyDown(KeyCode.Space) && !isMoving)
         {
-            StartCoroutine("NomalAttackCT");
+            NormalAttack();
+        }
+
+        // 돌아오는 중이면 계속 이동
+        if (isMoving && !isAttacking)
+        {
+            MoveBack();
         }
     }
 
-    public void Damage(int Attack)
+    public void NormalAttack()
     {
-        Pdata.Hp -= Attack;
+        if (!GameManager.ins.PlayTurn || isMoving || isAttacking)
+            return;
+
+        monsters = GameObject.FindGameObjectsWithTag("Monster");
+        if (monsters.Length == 0)
+            return;
+
+        int randomMonster = Random.Range(0, monsters.Length);
+        StartCoroutine(AttackCoroutine(monsters[randomMonster]));
+    }
+
+    IEnumerator AttackCoroutine(GameObject targetMonster)
+    {
+        isMoving = true;
+
+        // 몬스터로 이동
+        while (targetMonster != null && Vector3.Distance(transform.position, targetMonster.transform.position) > 0.5f)
+        {
+            Vector3 moveDir = (targetMonster.transform.position - transform.position).normalized;
+            rig.velocity = moveDir * 5f;
+            yield return null;
+        }
+
+        rig.velocity = Vector3.zero;
+
+        // 공격 애니메이션
+        if (targetMonster != null)
+        {
+            isAttacking = true;
+            ani.SetTrigger("attack");
+            yield return new WaitForSeconds(0.5f);
+
+            // 데미지 적용
+            Monster monster = targetMonster.GetComponent<Monster>();
+            if (monster != null)
+            {
+                monster.TakeDamage(Pdata.Attack);
+            }
+
+            isAttacking = false;
+        }
+
+        isMoving = true;
+    }
+
+    void MoveBack()
+    {
+        if (Vector3.Distance(transform.position, originalPos) > 0.1f)
+        {
+            Vector3 moveDir = (originalPos - transform.position).normalized;
+            rig.velocity = moveDir * 5f;
+        }
+        else
+        {
+            transform.position = originalPos;
+            rig.velocity = Vector3.zero;
+            isMoving = false;
+        }
+    }
+
+    public void TakeDamage(int damage)
+    {
+        Pdata.Hp -= damage;
         ani.SetTrigger("damage");
 
-        if(Pdata.Hp <= 0)
+        if (Pdata.Hp <= 0)
         {
+            Pdata.Hp = 0;
             GameManager.ins.D_Player.Remove(Pdata.Job);
             Destroy(gameObject);
         }
     }
 
-    IEnumerator NomalAttackCT()
+    void Sound()
     {
-        Monster = GameObject.FindGameObjectsWithTag("Monster");
-        Back = false;
-        int r = Random.Range(0, Monster.Length);
-
-        while(true)
+        if (Pdata.Job == "검사")
         {
-            if(Monster[r] != null)
-            {
-                home = false;
-
-                rig.MovePosition(Vector3.Lerp(transform.position,Monster[r].transform.position,20 * Time.deltaTime));
-
-                if (Vector3.Distance(transform.position, Monster[r].transform.position) <= 0.5f)
-                {
-                    ani.SetTrigger("attack");
-                }
-
-                yield return new WaitForSeconds(0.3f);
-                Back = true;
-                break;
-            }
-            yield return null;
+            SoundManager.instance.PlayAttackSound(8);
         }
-    }
 
-    private void Update()
-    {
-        if(Back == true)
+        if (Pdata.Job == "신관")
         {
-            rig.MovePosition(Vector3.Lerp(transform.position, OriPos, 20 * Time.deltaTime));
+            SoundManager.instance.PlayAttackSound(4);
+        }
 
-            if(Vector3.Distance(transform.position, OriPos)<= 0.5f)
-            {
-                transform.position = OriPos;
-                home = true;
-            }
+        if (Pdata.Job == "마법사")
+        {
+            SoundManager.instance.PlayAttackSound(2);
         }
     }
 }

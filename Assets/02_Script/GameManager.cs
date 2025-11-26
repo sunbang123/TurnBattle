@@ -1,3 +1,4 @@
+// ===== GameManager.cs =====
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -7,44 +8,42 @@ public class GameManager : MonoBehaviour
 {
     public static GameManager ins;
     public Dictionary<string, GameObject> D_Player = new Dictionary<string, GameObject>();
-
     public List<GameObject> L_Monster = new List<GameObject>();
 
-    //플레이어 3개
     public GameObject Player1;
     public GameObject Player2;
     public GameObject Player3;
 
-    //플레이어 3개
     public GameObject Monster1;
     public GameObject Monster2;
     public GameObject Monster3;
 
-    //상태창
     public GameObject[] Status;
     Text[] swordmanTxt;
     Text[] priestTxt;
     Text[] witchTxt;
 
-    // 전체 턴
     public Slider Turn;
     public Text Turntxt;
-    public float Turntime = 10;
-    CoolTime ct;
+    public float Turntime = 10f;
 
+    private CoolTime ct;
     public bool PlayTurn = true;
     public bool MonsterTurn = false;
-    public bool CurrTurn = false;
+    private Coroutine monsterAttackCoroutine;
+    
+    public GameObject WinPanel;
 
     private void Awake()
     {
-        ins = this;
-        ct = new CoolTime();
+        if (ins == null)
+            ins = this;
+        else
+            Destroy(gameObject);
     }
-    // Start is called before the first frame update
+
     void Start()
     {
-        //딕션너리쪽에서 데이터를 넣어서 관리한다.
         D_Player.Add("검사", Player1);
         D_Player.Add("신관", Player2);
         D_Player.Add("마법사", Player3);
@@ -53,115 +52,105 @@ public class GameManager : MonoBehaviour
         L_Monster.Add(Monster2);
         L_Monster.Add(Monster3);
 
-        //상태창
         Status = GameObject.FindGameObjectsWithTag("Status");
-
         swordmanTxt = Status[0].GetComponentsInChildren<Text>();
         priestTxt = Status[1].GetComponentsInChildren<Text>();
         witchTxt = Status[2].GetComponentsInChildren<Text>();
 
+        ct = new CoolTime();
+        ct.StartTimer(Turntime);
     }
 
-    // Update is called once per frame
     void Update()
     {
-        Turn.value = ct.Timer(Turntime);
+        // 턴 진행도 표시
+        Turn.value = ct.GetProgress();
 
-        if(Turn.value >= 0)
+        // 턴 시간이 끝났는지 확인
+        if (ct.IsFinished())
         {
-            PlayTurn = !PlayTurn;
-            CurrTurn = !PlayTurn;
-
-            if(PlayTurn)
-            {
-                Turntxt.text = "Player Turn";
-                MonsterTurn = false;
-            }
-            else
-            {
-                MonsterTurn = true;
-                Turntxt.text = "Monster Turn";
-                StartCoroutine("MonsterAttack");
-            }
+            SwitchTurn();
+            ct.StartTimer(Turntime);
         }
 
-        //PlayTurn = !PlayTurn;
-        //CurrTurn = PlayTurn;
-        //CurrTurn = !CurrTurn;
-
-        Debug.Log("CurrTurn  " + CurrTurn);
-
-        //상태표시창
-        StatusShow(); // StatusShow(sm);
-
+        StatusShow();
     }
 
-    //상태표시함수
-    void StatusShow() // String a
+    void SwitchTurn()
     {
-            //딕셔너리에서 검사를 찾아야한다.
-            if (D_Player.ContainsKey("검사"))
-            {
-                //소드맨오브젝트
-                Player P = D_Player["검사"].GetComponent<Player>();
+        PlayTurn = !PlayTurn;
+        MonsterTurn = !MonsterTurn;
 
-                if (P != null)
-                {
-                    //플레이어 가져옴
-                    swordmanTxt[0].text = P.Pdata.Job;
-                    swordmanTxt[1].text = "레벨             " + P.Pdata.Level;
-                    swordmanTxt[2].text = "경험치         " + P.Pdata.Exp;
-                    swordmanTxt[3].text = "HP           " + P.Pdata.Hp + "/" + P.Pdata.MaxHp;
-                    swordmanTxt[4].text = "MP           " + P.Pdata.Mp + "/" + P.Pdata.MaxMp;
-                }
-            }
-
-            //딕셔너리에서 신관을 찾아야한다.
-            if (D_Player.ContainsKey("신관"))
-            {
-                //소드맨오브젝트
-                Player P2 = D_Player["신관"].GetComponent<Player>();
-
-                if (P2 != null)
-                {
-                    //플레이어 가져옴
-                    priestTxt[0].text = P2.Pdata.Job;
-                    priestTxt[1].text = "레벨             " + P2.Pdata.Level;
-                    priestTxt[2].text = "경험치         " + P2.Pdata.Exp;
-                    priestTxt[3].text = "HP           " + P2.Pdata.Hp + "/" + P2.Pdata.MaxHp;
-                    priestTxt[4].text = "MP           " + P2.Pdata.Mp + "/" + P2.Pdata.MaxMp;
-                }
-            }
-
-            //딕셔너리에서 마법사를 찾아야한다.
-            if (D_Player.ContainsKey("마법사"))
-            {
-                //소드맨오브젝트
-                Player P3 = D_Player["마법사"].GetComponent<Player>();
-
-                if (P3 != null)
-                {
-                    //플레이어 가져옴
-                    witchTxt[0].text = P3.Pdata.Job;
-                    witchTxt[1].text = "레벨             " + P3.Pdata.Level;
-                    witchTxt[2].text = "경험치         " + P3.Pdata.Exp;
-                    witchTxt[3].text = "HP           " + P3.Pdata.Hp + "/" + P3.Pdata.MaxHp;
-                    witchTxt[4].text = "MP           " + P3.Pdata.Mp + "/" + P3.Pdata.MaxMp;
-                }
-            }
+        if (PlayTurn)
+        {
+            Turntxt.text = "Player Turn";
+            // 몬스터 공격 코루틴 중지
+            if (monsterAttackCoroutine != null)
+                StopCoroutine(monsterAttackCoroutine);
+        }
+        else
+        {
+            Turntxt.text = "Monster Turn";
+            monsterAttackCoroutine = StartCoroutine(MonsterAttackSequence());
+        }
     }
 
-    IEnumerator MonsterAttack()
+    void StatusShow()
+    {
+        UpdatePlayerStatus("검사", swordmanTxt);
+        UpdatePlayerStatus("신관", priestTxt);
+        UpdatePlayerStatus("마법사", witchTxt);
+    }
+
+    void UpdatePlayerStatus(string jobName, Text[] textArray)
+    {
+        if (D_Player.ContainsKey(jobName))
+        {
+            Player p = D_Player[jobName].GetComponent<Player>();
+            if (p != null)
+            {
+                textArray[0].text = p.Pdata.Job;
+                textArray[1].text = "레벨        " + p.Pdata.Level;
+                textArray[2].text = "경험치      " + p.Pdata.Exp;
+                textArray[3].text = "HP         " + p.Pdata.Hp + "/" + p.Pdata.MaxHp;
+                textArray[4].text = "MP         " + p.Pdata.Mp + "/" + p.Pdata.MaxMp;
+            }
+        }
+    }
+
+    IEnumerator MonsterAttackSequence()
     {
         int i = 0;
-        while(MonsterTurn)
+        while (MonsterTurn && L_Monster.Count > 0)
         {
-            if (L_Monster.Count != 0)
+            // 죽은 몬스터 제거
+            L_Monster.RemoveAll(m => m == null);
+
+            if (L_Monster.Count == 0)
             {
-                L_Monster[(i++) % L_Monster.Count].
-                    GetComponent<Monster>().NomalAttack();
+                WinPanel.SetActive(true);
+                MonsterTurn = false;
+                PlayTurn = false;
+                yield break;
             }
+
+            GameObject monsterObj = L_Monster[i % L_Monster.Count];
+            if (monsterObj != null)
+            {
+                Monster monster = monsterObj.GetComponent<Monster>();
+                if (monster != null)
+                {
+                    monster.NormalAttack();
+                }
+            }
+            i++;
             yield return new WaitForSeconds(2f);
         }
+    }
+
+    public void RemoveMonster(GameObject monster)
+    {
+        if (L_Monster.Contains(monster))
+            L_Monster.Remove(monster);
     }
 }
